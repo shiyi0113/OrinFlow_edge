@@ -56,7 +56,8 @@ void drawDetections(void* image, uint32_t width, uint32_t height,
 
         // 绘制边界框
         cudaDrawRect(image, width, height, IMAGE_RGB8,
-                     det.x1, det.y1, det.x2, det.y2, color, 2);
+             (int)det.x1, (int)det.y1, (int)det.x2, (int)det.y2, 
+             make_float4(0, 0, 0, 0), color, 2.0f);
 
         // 绘制标签文字
         if (font)
@@ -130,7 +131,8 @@ int main(int argc, char** argv) {
 
     printf("Processing started...\n");
     int frameCount = 0;
-
+    std::ofstream logFile("performance_log.txt");
+        logFile << "Frame, FPS, DetectionCount" << std::endl;
     // 主循环
     while (!gSignalReceived) {
         // 1. 获取图像
@@ -150,7 +152,7 @@ int main(int argc, char** argv) {
         }
         // 2. 检测
         Detection* detections = NULL;
-        int count = detector.detect(imgInput, 
+        int count = detector->detect(imgInput, 
                                     input->GetWidth(), 
                                     input->GetHeight(), 
                                     &detections);
@@ -166,7 +168,9 @@ int main(int argc, char** argv) {
         snprintf(statusStr, sizeof(statusStr), "YOLO26 | %d detections | %.1f FPS",
                  count, output->GetFrameRate());
         output->SetStatus(statusStr);
-
+        if (frameCount % 30 == 0) { // 每30帧打印一次
+            printf("Frame: %d, FPS: %.2f, Detections: %d\n", frameCount, currentFPS, count);
+        }
         frameCount++;
         if (!output->IsStreaming())
             break;

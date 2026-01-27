@@ -1,4 +1,4 @@
-#include "cudaPreprocess.h"
+#include "cudaPreprocess.cuh"
 
 // 填充颜色 (114, 114, 114) 归一化后的值
 static constexpr float FILL_VALUE = 114.0f / 255.0f;

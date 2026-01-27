@@ -2,7 +2,7 @@
 #define __DETECT_YOLO_H__
 
 #include "detectBase.h"
-#include "cudaPreprocess.h"
+#include "cudaPreprocess.cuh"
 
 /**
  * YOLO 检测器 (端到端模型)

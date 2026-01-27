@@ -3,6 +3,7 @@
 #include <jetson-utils/filesystem.h>
 #include <fstream>
 #include <algorithm>
+#include <sstream>
 
 // TensorRT Logger
 class TRTLogger : public nvinfer1::ILogger
@@ -156,9 +157,10 @@ int DetectBase::detect(void* image, uint32_t width, uint32_t height,
 //----------------------------------------------------------
 bool DetectBase::inference()
 {
-    void* bindings[] = { mInputDevice, mOutputDevice };
-    
-    bool success = mContext->enqueueV2(bindings, mStream, nullptr);
+    mContext->setTensorAddress("images", mInputDevice);
+    mContext->setTensorAddress("output0", mOutputDevice);
+
+    bool success = mContext->enqueueV3(mStream);
     
     // 同步等待完成
     cudaStreamSynchronize(mStream);
