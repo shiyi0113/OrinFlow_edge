@@ -1,5 +1,13 @@
 build/
-*.onnx
-*.mp4
-*.engine
 output/
+
+*.onnx
+*.engine
+*.trt
+*.mp4
+*.avi
+*.csv
+
+performance_log.txt
+.vscode/
+.idea/

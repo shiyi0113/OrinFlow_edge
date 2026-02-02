@@ -28,16 +28,6 @@ struct LetterBoxInfo
  *   3. BGR -> RGB
  *   4. HWC -> CHW
  *   5. 归一化到 [0, 1]
- *
- * @param input       输入图像（GPU内存，uchar3，BGR格式）
- * @param inputWidth  输入图像宽度
- * @param inputHeight 输入图像高度
- * @param output      输出张量（GPU内存，float，CHW格式）
- * @param outputWidth 模型输入宽度（如640）
- * @param outputHeight 模型输入高度（如640）
- * @param info        输出LetterBox信息，用于坐标还原
- * @param stream      CUDA流
- * @return cudaSuccess 表示成功
  */
 cudaError_t cudaLetterBoxPreprocess(
     void* input,

@@ -2,7 +2,7 @@
 #define __DETECT_YOLO_H__
 
 #include "detectBase.h"
-#include "cudaPreprocess.cuh"
+#include "cuda/cudaPreprocess.cuh"
 
 /**
  * YOLO 检测器 (端到端模型)
@@ -28,35 +28,19 @@ public:
     DetectYOLO();
     virtual ~DetectYOLO();
 
-    /**
-     * 设置置信度阈值
-     */
     void setThreshold(float threshold) { mThreshold = threshold; }
     float getThreshold() const { return mThreshold; }
 
 protected:
-    // ========== 实现基类纯虚函数 ==========
-
-    /**
-     * 预处理: LetterBox + BGR->RGB + HWC->CHW + 归一化
-     */
     bool preProcess(void* image, uint32_t width, uint32_t height) override;
-
-    /**
-     * 后处理: 解析端到端输出，还原坐标
-     */
     int postProcess(uint32_t width, uint32_t height) override;
-
-    /**
-     * 初始化模型参数
-     */
     bool initModelParams() override;
 
 protected:
-    float mThreshold = 0.25f;      // 置信度阈值
-    int   mMaxDetections = 300;    // 模型最大检测数量
+    float mThreshold = 0.25f;
+    int   mMaxDetections = 300;
 
-    LetterBoxInfo mLetterBoxInfo;  // 预处理信息，用于坐标还原
+    LetterBoxInfo mLetterBoxInfo;
 };
 
 #endif

@@ -3,7 +3,10 @@
 #include <jetson-utils/cudaFont.h>
 #include <jetson-utils/cudaDraw.h>
 #include <signal.h>
-#include "detectYOLO.h"
+
+#include "core/detectYOLO.h"
+#include "utils/timer.h"
+#include "utils/logger.h"
 
 // 预定义颜色（用于不同类别）
 static const float4 COLORS[] = {
@@ -27,16 +30,18 @@ void signalHandler(int sig) {
 }
 
 void printUsage() {
-    printf("\nUsage: yolo26_detect [options]\n\n");
+    printf("\nUsage: detectnet [options]\n\n");
     printf("Options:\n");
     printf("  --input=URI       Input video source (file, csi, v4l2, rtsp)\n");
     printf("  --output=URI      Output video destination\n");
     printf("  --model=PATH      Path to TensorRT engine file\n");
     printf("  --labels=PATH     Path to class labels file\n");
     printf("  --threshold=N     Detection threshold (default: 0.25)\n");
+    printf("  --log=PATH        Performance log output (default: none)\n");
     printf("\nExamples:\n");
-    printf("  yolo26_detect --input=video.mp4 --output=result.mp4\n");
-    printf("  yolo26_detect --input=csi://0 --output=display://0\n");
+    printf("  detectnet --input=video.mp4 --output=result.mp4\n");
+    printf("  detectnet --input=csi://0 --output=display://0\n");
+    printf("  detectnet --input=video.mp4 --log=perf.csv\n");
     printf("\n");
 }
 
@@ -50,16 +55,12 @@ void drawDetections(void* image, uint32_t width, uint32_t height,
     for (int i = 0; i < count; i++)
     {
         const Detection& det = detections[i];
-
-        // 根据类别选择颜色
         const float4& color = COLORS[det.classId % NUM_COLORS];
 
-        // 绘制边界框
         cudaDrawRect(image, width, height, IMAGE_RGB8,
-             (int)det.x1, (int)det.y1, (int)det.x2, (int)det.y2, 
+             (int)det.x1, (int)det.y1, (int)det.x2, (int)det.y2,
              make_float4(0, 0, 0, 0), color, 2.0f);
 
-        // 绘制标签文字
         if (font)
         {
             char label[128];
@@ -75,10 +76,8 @@ void drawDetections(void* image, uint32_t width, uint32_t height,
 }
 
 int main(int argc, char** argv) {
-    // 注册信号处理
     signal(SIGINT, signalHandler);
 
-    // 解析命令行参数
     commandLine cmdLine(argc, argv);
 
     if (cmdLine.GetFlag("help")) {
@@ -86,12 +85,12 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // 获取参数
-    const char* inputUri = cmdLine.GetString("input", "video.mp4");
-    const char* outputUri = cmdLine.GetString("output", "result.mp4");
-    const char* modelPath = cmdLine.GetString("model", "yolo26.engine");
-    const char* labelsPath = cmdLine.GetString("labels", "coco_labels.txt");
-    float threshold = cmdLine.GetFloat("threshold", 0.25f);
+    const char* inputUri   = cmdLine.GetString("input", "video.mp4");
+    const char* outputUri  = cmdLine.GetString("output", "result.mp4");
+    const char* modelPath  = cmdLine.GetString("model", "yolo26.engine");
+    const char* labelsPath = cmdLine.GetString("labels", "coco.txt");
+    const char* logPath    = cmdLine.GetString("log", nullptr);
+    float threshold        = cmdLine.GetFloat("threshold", 0.25f);
 
     printf("=== YOLO26 Detector ===\n");
     printf("Input:     %s\n", inputUri);
@@ -99,8 +98,9 @@ int main(int argc, char** argv) {
     printf("Model:     %s\n", modelPath);
     printf("Labels:    %s\n", labelsPath);
     printf("Threshold: %.2f\n", threshold);
+    if (logPath)
+        printf("Log:       %s\n", logPath);
     printf("\n");
-
 
     // 创建检测器
     DetectYOLO* detector = DetectYOLO::create(modelPath, threshold);
@@ -109,30 +109,34 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // 加载类别标签
     detector->loadLabels(labelsPath);
 
-    // 创建输入源
+    // 创建输入/输出
     videoSource* input = videoSource::Create(inputUri);
     if (!input) {
         printf("Failed to create input: %s\n", inputUri);
         return -1;
     }
 
-    // 创建输出
     videoOutput* output = videoOutput::Create(outputUri);
     if (!output) {
         printf("Failed to create output: %s\n", outputUri);
         return -1;
     }
 
-    // 创建字体（用于绘制标签）
     cudaFont* font = cudaFont::Create();
+
+    // 性能日志（可选）
+    PerfLogger perfLog;
+    if (logPath)
+        perfLog.open(logPath);
+
+    // 推理计时器
+    CudaTimer timer;
 
     printf("Processing started...\n");
     int frameCount = 0;
-    std::ofstream logFile("performance_log.txt");
-        logFile << "Frame, FPS, DetectionCount" << std::endl;
+
     // 主循环
     while (!gSignalReceived) {
         // 1. 获取图像
@@ -150,36 +154,49 @@ int main(int argc, char** argv) {
             printf("Capture error\n");
             break;
         }
-        // 2. 检测
+
+        // 2. 检测（计时）
+        timer.start();
         Detection* detections = NULL;
-        int count = detector->detect(imgInput, 
-                                    input->GetWidth(), 
-                                    input->GetHeight(), 
-                                    &detections);
-        // 3. 后处理
+        int count = detector->detect(imgInput,
+                                     input->GetWidth(),
+                                     input->GetHeight(),
+                                     &detections);
+        float inferenceMs = timer.stop();
+
+        // 3. 绘制
         if (count > 0) {
             drawDetections(imgInput, input->GetWidth(), input->GetHeight(),
                            detections, count, detector, font);
         }
-        // 4. 保存结果
+
+        // 4. 输出
         output->Render(imgInput, input->GetWidth(), input->GetHeight());
-        // 状态显示
+
+        float fps = output->GetFrameRate();
+
+        // 状态栏
         char statusStr[128];
         snprintf(statusStr, sizeof(statusStr), "YOLO26 | %d detections | %.1f FPS",
-                 count, output->GetFrameRate());
+                 count, fps);
         output->SetStatus(statusStr);
-        if (frameCount % 30 == 0) { // 每30帧打印一次
-            printf("Frame: %d, FPS: %.2f, Detections: %d\n", frameCount, currentFPS, count);
+
+        // 日志
+        if (logPath)
+            perfLog.log(frameCount, fps, inferenceMs, count);
+
+        if (frameCount % 30 == 0) {
+            printf("Frame %d | %.1f FPS | %.1f ms | %d detections\n",
+                   frameCount, fps, inferenceMs, count);
         }
+
         frameCount++;
         if (!output->IsStreaming())
             break;
     }
 
-    // 清理
     printf("Processed %d frames\n", frameCount);
 
-    // 清理资源
     SAFE_DELETE(font);
     SAFE_DELETE(detector);
     SAFE_DELETE(input);

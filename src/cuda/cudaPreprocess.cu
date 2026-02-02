@@ -21,23 +21,20 @@ __global__ void letterBoxPreprocessKernel(
     float padTop
 )
 {
-    // 计算输出像素坐标
     int outX = blockIdx.x * blockDim.x + threadIdx.x;
     int outY = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (outX >= outputWidth || outY >= outputHeight)
         return;
 
-    // 输出平面大小（用于 CHW 布局）
     int planeSize = outputWidth * outputHeight;
 
-    // 计算对应的输入坐标（去除padding后反向映射）
+    // 反向映射到输入坐标
     float srcX = (outX - padLeft) / scale;
     float srcY = (outY - padTop) / scale;
 
     float r, g, b;
 
-    // 判断是否在有效区域内
     if (srcX >= 0 && srcX < inputWidth && srcY >= 0 && srcY < inputHeight)
     {
         // 双线性插值
@@ -49,14 +46,12 @@ __global__ void letterBoxPreprocessKernel(
         float dx = srcX - x0;
         float dy = srcY - y0;
 
-        // 获取四个邻域像素 (BGR格式)
         uchar3 p00 = input[y0 * inputWidth + x0];
         uchar3 p01 = input[y0 * inputWidth + x1];
         uchar3 p10 = input[y1 * inputWidth + x0];
         uchar3 p11 = input[y1 * inputWidth + x1];
 
         // 双线性插值 + 归一化 + BGR->RGB
-        // input是BGR，输出需要RGB，所以 r=z(B位置), b=x(R位置)
         r = ((1 - dx) * (1 - dy) * p00.z + dx * (1 - dy) * p01.z +
              (1 - dx) * dy * p10.z + dx * dy * p11.z) / 255.0f;
 
@@ -68,15 +63,14 @@ __global__ void letterBoxPreprocessKernel(
     }
     else
     {
-        // 填充区域，使用灰色
         r = g = b = FILL_VALUE;
     }
 
-    // 写入输出（CHW格式：R平面, G平面, B平面）
+    // CHW 布局
     int outIdx = outY * outputWidth + outX;
-    output[0 * planeSize + outIdx] = r;  // R channel
-    output[1 * planeSize + outIdx] = g;  // G channel
-    output[2 * planeSize + outIdx] = b;  // B channel
+    output[0 * planeSize + outIdx] = r;
+    output[1 * planeSize + outIdx] = g;
+    output[2 * planeSize + outIdx] = b;
 }
 
 cudaError_t cudaLetterBoxPreprocess(
@@ -90,20 +84,16 @@ cudaError_t cudaLetterBoxPreprocess(
     cudaStream_t stream
 )
 {
-    // 计算缩放比例（保持宽高比）
     float scaleW = (float)outputWidth / inputWidth;
     float scaleH = (float)outputHeight / inputHeight;
     float scale = fminf(scaleW, scaleH);
 
-    // 缩放后的尺寸
     int newWidth = (int)roundf(inputWidth * scale);
     int newHeight = (int)roundf(inputHeight * scale);
 
-    // 计算居中padding
     float padLeft = (outputWidth - newWidth) / 2.0f;
     float padTop = (outputHeight - newHeight) / 2.0f;
 
-    // 填充输出信息
     if (info)
     {
         info->scale = scale;
@@ -113,7 +103,6 @@ cudaError_t cudaLetterBoxPreprocess(
         info->newHeight = newHeight;
     }
 
-    // 启动内核
     dim3 blockDim(32, 32);
     dim3 gridDim(
         (outputWidth + blockDim.x - 1) / blockDim.x,

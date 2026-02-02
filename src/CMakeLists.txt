@@ -1,24 +1,27 @@
-# --- 1. 定义源文件 ---
-file(GLOB_RECURSE CUDA_SOURCES *.cu)
-file(GLOB_RECURSE CPP_SOURCES *.cpp)
+# 源文件
+set(CORE_SOURCES
+    core/detectBase.cpp
+    core/detectYOLO.cpp
+)
 
-# --- 2. 创建库目标 ---
-add_library(yolo26_detect SHARED
-    ${CPP_SOURCES}
+set(CUDA_SOURCES
+    cuda/cudaPreprocess.cu
+)
+
+# 共享库
+add_library(orinflow_edge SHARED
+    ${CORE_SOURCES}
     ${CUDA_SOURCES}
 )
 
-# --- 配置包含路径 ---
-target_include_directories(yolo26_detect PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}           # 当前 src 目录
-    ${PROJECT_SOURCE_DIR}                 # 项目根目录
-    ${TENSORRT_INCLUDE_DIR}               # TensorRT 目录
-    ${jetson-utils_INCLUDE_DIRS}          # Jetson-utils 目录
-    ${CUDAToolkit_INCLUDE_DIRS}           # CUDA Toolkit 目录
+target_include_directories(orinflow_edge PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}             # src/ (core/, cuda/, utils/ 的相对引用)
+    ${TENSORRT_INCLUDE_DIR}
+    ${jetson-utils_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
 )
 
-# --- 链接库 ---
-target_link_libraries(yolo26_detect
+target_link_libraries(orinflow_edge
     PRIVATE
     CUDA::cudart
     CUDA::cublas

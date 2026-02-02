@@ -1,14 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
 project(OrinFlow_edge LANGUAGES CXX CUDA)
 
-# 设置 CUDA 架构
-set(CMAKE_CUDA_ARCHITECTURES 87)  
-# C++17 标准
+# CUDA 架构 (Orin Nano Super = SM 8.7)
+set(CMAKE_CUDA_ARCHITECTURES 87)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# 查找依赖
+# 依赖
 find_package(CUDAToolkit REQUIRED)
 find_package(jetson-utils REQUIRED)
 
@@ -16,6 +15,6 @@ find_package(jetson-utils REQUIRED)
 set(TENSORRT_INCLUDE_DIR "/usr/include/aarch64-linux-gnu")
 set(TENSORRT_LIB_DIR "/usr/lib/aarch64-linux-gnu")
 
-# 添加子目录
+# 子目录
 add_subdirectory(src)
-add_subdirectory(scripts)
+add_subdirectory(app)
