@@ -20,14 +20,15 @@ struct LetterBoxInfo
 /**
  * CUDA LetterBox 预处理
  *
- * 将输入图像（uchar3, BGR, HWC）转换为模型输入（float, RGB, CHW）
+ * 将输入图像（uchar3, RGB, HWC）转换为模型输入（float, RGB, CHW）
  *
  * 处理流程:
  *   1. 保持宽高比缩放到目标尺寸
  *   2. 灰色填充 (114, 114, 114)
- *   3. BGR -> RGB
- *   4. HWC -> CHW
- *   5. 归一化到 [0, 1]
+ *   3. HWC -> CHW
+ *   4. 归一化到 [0, 1]
+ *
+ * 注意: jetson-utils 提供的图像已经是 RGB 格式，无需通道交换
  */
 cudaError_t cudaLetterBoxPreprocess(
     void* input,

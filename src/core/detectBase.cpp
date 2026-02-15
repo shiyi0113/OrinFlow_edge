@@ -32,56 +32,63 @@ DetectBase::~DetectBase()
 //----------------------------------------------------------
 bool DetectBase::loadModel(const char* enginePath, int deviceId)
 {
+    // 1. 设置 GPU 设备
     cudaSetDevice(deviceId);
-
+    
+    // 2. 读取引擎文件
     std::ifstream file(enginePath, std::ios::binary);
     if (!file.good()) {
         LogError("DetectBase: 无法打开引擎文件 %s\n", enginePath);
         return false;
     }
-
+    
     file.seekg(0, std::ios::end);
     size_t fileSize = file.tellg();
     file.seekg(0, std::ios::beg);
-
+    
     std::vector<char> engineData(fileSize);
     file.read(engineData.data(), fileSize);
     file.close();
-
+    
+    // 3. 创建 Runtime 和 Engine
     mRuntime = nvinfer1::createInferRuntime(gLogger);
     if (!mRuntime) {
         LogError("DetectBase: 创建 TensorRT Runtime 失败\n");
         return false;
     }
-
+    
     mEngine = mRuntime->deserializeCudaEngine(engineData.data(), fileSize);
     if (!mEngine) {
         LogError("DetectBase: 反序列化引擎失败\n");
         return false;
     }
-
+    
+    // 4. 创建执行上下文
     mContext = mEngine->createExecutionContext();
     if (!mContext) {
         LogError("DetectBase: 创建执行上下文失败\n");
         return false;
     }
-
+    
+    // 5. 创建 CUDA 流
     cudaStreamCreate(&mStream);
-
+    
+    // 6. 初始化模型参数（子类实现）
     if (!initModelParams()) {
         LogError("DetectBase: 初始化模型参数失败\n");
         return false;
     }
-
+    
+    // 7. 分配显存
     if (!allocBuffers()) {
         LogError("DetectBase: 分配显存失败\n");
         return false;
     }
-
+    
     mModelLoaded = true;
-    LogInfo("DetectBase: 模型加载成功 (%dx%d, %d类)\n",
+    LogInfo("DetectBase: 模型加载成功 (%dx%d, %d类)\n", 
             mInputWidth, mInputHeight, mNumClasses);
-
+    
     return true;
 }
 
@@ -90,18 +97,25 @@ bool DetectBase::loadModel(const char* enginePath, int deviceId)
 //----------------------------------------------------------
 bool DetectBase::allocBuffers()
 {
+    // 输入显存 (CHW, float32)
     mInputSize = mInputWidth * mInputHeight * 3 * sizeof(float);
     if (cudaMalloc(&mInputDevice, mInputSize) != cudaSuccess) {
         LogError("DetectBase: 分配输入显存失败\n");
         return false;
     }
-
+    
+    // 输出显存
     if (cudaMalloc(&mOutputDevice, mOutputSize) != cudaSuccess) {
         LogError("DetectBase: 分配输出显存失败\n");
         return false;
     }
-
+    
+    // 输出主机内存（用于后处理）
     mOutputHost = new float[mOutputSize / sizeof(float)];
+
+    // 绑定 tensor 地址（地址固定，只需设置一次）
+    mContext->setTensorAddress("images", mInputDevice);
+    mContext->setTensorAddress("output0", mOutputDevice);
 
     return true;
 }
@@ -116,24 +130,29 @@ int DetectBase::detect(void* image, uint32_t width, uint32_t height,
         LogError("DetectBase: 模型未加载\n");
         return -1;
     }
-
+    
+    // 清空上次结果
     mDetections.clear();
-
+    
+    // 1. 预处理（子类实现）
     if (!preProcess(image, width, height)) {
         LogError("DetectBase: 预处理失败\n");
         return -1;
     }
-
+    
+    // 2. 推理
     if (!inference()) {
         LogError("DetectBase: 推理失败\n");
         return -1;
     }
-
+    
+    // 3. 后处理（子类实现）
     int count = postProcess(width, height);
-
+    
+    // 4. 返回结果
     if (detections)
         *detections = mDetections.data();
-
+    
     return count;
 }
 
@@ -142,15 +161,13 @@ int DetectBase::detect(void* image, uint32_t width, uint32_t height,
 //----------------------------------------------------------
 bool DetectBase::inference()
 {
-    mContext->setTensorAddress("images", mInputDevice);
-    mContext->setTensorAddress("output0", mOutputDevice);
-
     bool success = mContext->enqueueV3(mStream);
 
+    // 异步拷贝输出到主机内存，然后统一同步
+    cudaMemcpyAsync(mOutputHost, mOutputDevice, mOutputSize,
+                    cudaMemcpyDeviceToHost, mStream);
     cudaStreamSynchronize(mStream);
-
-    cudaMemcpy(mOutputHost, mOutputDevice, mOutputSize, cudaMemcpyDeviceToHost);
-
+    
     return success;
 }
 
@@ -159,22 +176,24 @@ bool DetectBase::inference()
 //----------------------------------------------------------
 void DetectBase::nms(float iouThreshold)
 {
+    // 按置信度降序排序
     std::sort(mDetections.begin(), mDetections.end(),
         [](const Detection& a, const Detection& b) {
             return a.confidence > b.confidence;
         });
-
+    
     std::vector<Detection> result;
     std::vector<bool> suppressed(mDetections.size(), false);
-
+    
     for (size_t i = 0; i < mDetections.size(); i++) {
         if (suppressed[i]) continue;
-
+        
         result.push_back(mDetections[i]);
-
+        
         for (size_t j = i + 1; j < mDetections.size(); j++) {
             if (suppressed[j]) continue;
-
+            
+            // 同类别才做 NMS
             if (mDetections[i].classId == mDetections[j].classId) {
                 if (mDetections[i].iou(mDetections[j]) > iouThreshold) {
                     suppressed[j] = true;
@@ -182,7 +201,7 @@ void DetectBase::nms(float iouThreshold)
             }
         }
     }
-
+    
     mDetections = std::move(result);
 }
 
@@ -196,15 +215,16 @@ bool DetectBase::loadLabels(const char* labelPath)
         LogWarning("DetectBase: 无法加载标签文件 %s\n", labelPath);
         return false;
     }
-
+    
     std::istringstream stream(content);
     std::string line;
     mLabels.clear();
-
+    
     while (std::getline(stream, line)) {
         if (!line.empty())
             mLabels.push_back(line);
     }
+    // 根据标签数量更新类别数
     mNumClasses = (int)mLabels.size();
     LogInfo("DetectBase: 加载 %zu 个类别标签\n", mLabels.size());
     return true;
@@ -229,6 +249,6 @@ void DetectBase::release()
     if (mContext)      { delete mContext; mContext = nullptr; }
     if (mEngine)       { delete mEngine; mEngine = nullptr; }
     if (mRuntime)      { delete mRuntime; mRuntime = nullptr; }
-
+    
     mModelLoaded = false;
 }
