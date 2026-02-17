@@ -1,6 +1,5 @@
 #pragma once
 
-#include "detection.h"
 #include "TRTLogger.h"
 
 #include <NvInfer.h>
@@ -9,6 +8,13 @@
 #include <string>
 #include <memory>
 #include <vector>
+
+struct Detection
+{
+    float x1, y1, x2, y2;  // 边界框坐标（像素）
+    float confidence;      // 置信度 [0,1]
+    int   classId;         // 类别ID
+};
 
 class DetectBase
 {
@@ -40,11 +46,9 @@ protected:
 
     bool allocBuffers();
 
-    int mInputSize = 0;
     int mOutputSize = 0;
     int inputH = 0;
     int inputW = 0;
-    int numDets = 0;
 
     virtual bool preProcess(void* image, uint32_t width, uint32_t height) = 0;
     virtual int postProcess(uint32_t width, uint32_t height) = 0;

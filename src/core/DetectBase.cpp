@@ -97,15 +97,16 @@ bool DetectBase::allocBuffers()
             mContext->setTensorAddress(name, mInputDevice);
             inputH = dims.d[2];
             inputW = dims.d[3];
-            mInputSize = totalSize;
         }
         else if(mode == nvinfer1::TensorIOMode::kOUTPUT)
         {
             if(mOutputDevice) cudaFree(mOutputDevice);
             mOutputDevice = allocatedPtr;
             mContext->setTensorAddress(name, mOutputDevice);
-            numDets = dims.d[1];
             mOutputSize = totalSize;
+
+            if(mOutputHost) delete[] mOutputHost;
+            mOutputHost = new float[volume];
         }
     }
     return true;
@@ -158,8 +159,7 @@ bool DetectBase::loadLabels(const char* labelPath)
         if (!line.empty())
             mLabels.push_back(line);
     }
-    // 根据标签数量更新类别数
-    numDets = (int)mLabels.size();
+
     LogInfo("DetectBase: 加载 %zu 个类别标签\n", mLabels.size());
     return true;
 }

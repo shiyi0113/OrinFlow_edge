@@ -1,9 +1,8 @@
 #include "detectYOLO.h"
 #include <jetson-utils/logging.h>
+#include <cmath>
 
-//----------------------------------------------------------
-// 创建检测器（工厂方法）
-//----------------------------------------------------------
+
 DetectYOLO* DetectYOLO::create(const char* enginePath, float threshold)
 {
     DetectYOLO* detector = new DetectYOLO();
