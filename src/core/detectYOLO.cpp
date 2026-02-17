@@ -19,9 +19,7 @@ DetectYOLO* DetectYOLO::create(const char* enginePath, float threshold)
     return detector;
 }
 
-//----------------------------------------------------------
-// 构造/析构
-//----------------------------------------------------------
+
 DetectYOLO::DetectYOLO()
 {
 }
@@ -30,47 +28,6 @@ DetectYOLO::~DetectYOLO()
 {
 }
 
-//----------------------------------------------------------
-// 初始化模型参数
-//----------------------------------------------------------
-bool DetectYOLO::initModelParams()
-{
-    auto inputDims = mEngine->getTensorShape("images");
-    if (inputDims.nbDims != 4)
-    {
-        LogError("DetectYOLO: 输入维度错误，期望4维，实际%d维\n", inputDims.nbDims);
-        return false;
-    }
-
-    mInputHeight = inputDims.d[2];
-    mInputWidth = inputDims.d[3];
-
-    auto outputDims = mEngine->getTensorShape("output0");
-    if (outputDims.nbDims != 3)
-    {
-        LogError("DetectYOLO: 输出维度错误，期望3维，实际%d维\n", outputDims.nbDims);
-        return false;
-    }
-
-    mMaxDetections = outputDims.d[1];
-    int numValues = outputDims.d[2];
-
-    if (numValues != 6)
-    {
-        LogWarning("DetectYOLO: 输出每检测值数量=%d，期望6\n", numValues);
-    }
-
-    mOutputSize = 1 * mMaxDetections * numValues * sizeof(float);
-
-    LogInfo("DetectYOLO: 输入 %dx%d, 最大检测数 %d\n",
-            mInputWidth, mInputHeight, mMaxDetections);
-
-    return true;
-}
-
-//----------------------------------------------------------
-// 预处理
-//----------------------------------------------------------
 bool DetectYOLO::preProcess(void* image, uint32_t width, uint32_t height)
 {
     cudaError_t err = cudaLetterBoxPreprocess(
@@ -78,8 +35,8 @@ bool DetectYOLO::preProcess(void* image, uint32_t width, uint32_t height)
         width,
         height,
         (float*)mInputDevice,
-        mInputWidth,
-        mInputHeight,
+        inputW,
+        inputH,
         &mLetterBoxInfo,
         mStream
     );
@@ -93,9 +50,6 @@ bool DetectYOLO::preProcess(void* image, uint32_t width, uint32_t height)
     return true;
 }
 
-//----------------------------------------------------------
-// 后处理
-//----------------------------------------------------------
 int DetectYOLO::postProcess(uint32_t width, uint32_t height)
 {
     const float* output = mOutputHost;

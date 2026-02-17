@@ -1,7 +1,6 @@
-#ifndef __DETECT_YOLO_H__
-#define __DETECT_YOLO_H__
+#pragma once
 
-#include "detectBase.h"
+#include "DetectBase.h"
 #include "cuda/cudaPreprocess.cuh"
 
 /**
@@ -34,7 +33,6 @@ public:
 protected:
     bool preProcess(void* image, uint32_t width, uint32_t height) override;
     int postProcess(uint32_t width, uint32_t height) override;
-    bool initModelParams() override;
 
 protected:
     float mThreshold = 0.25f;
@@ -42,5 +40,3 @@ protected:
 
     LetterBoxInfo mLetterBoxInfo;
 };
-
-#endif

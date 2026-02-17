@@ -1,6 +1,6 @@
 # 源文件
 set(CORE_SOURCES
-    core/detectBase.cpp
+    core/DetectBase.cpp
     core/detectYOLO.cpp
 )
 
@@ -15,7 +15,7 @@ add_library(orinflow_edge SHARED
 )
 
 target_include_directories(orinflow_edge PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}             # src/ (core/, cuda/, utils/ 的相对引用)
+    ${CMAKE_CURRENT_SOURCE_DIR}             
     ${TENSORRT_INCLUDE_DIR}
     ${jetson-utils_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}

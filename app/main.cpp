@@ -5,8 +5,6 @@
 #include <signal.h>
 
 #include "core/detectYOLO.h"
-#include "utils/timer.h"
-#include "utils/logger.h"
 
 // 预定义颜色（用于不同类别）
 static const float4 COLORS[] = {
@@ -45,9 +43,6 @@ void printUsage() {
     printf("\n");
 }
 
-/**
- * 绘制检测结果
- */
 void drawDetections(void* image, uint32_t width, uint32_t height,
                     Detection* detections, int count,
                     DetectYOLO* detector, cudaFont* font)
@@ -89,7 +84,6 @@ int main(int argc, char** argv) {
     const char* outputUri  = cmdLine.GetString("output", "result.mp4");
     const char* modelPath  = cmdLine.GetString("model", "yolo26.engine");
     const char* labelsPath = cmdLine.GetString("labels", "coco.txt");
-    const char* logPath    = cmdLine.GetString("log", nullptr);
     float threshold        = cmdLine.GetFloat("threshold", 0.25f);
 
     printf("=== YOLO26 Detector ===\n");
@@ -98,8 +92,6 @@ int main(int argc, char** argv) {
     printf("Model:     %s\n", modelPath);
     printf("Labels:    %s\n", labelsPath);
     printf("Threshold: %.2f\n", threshold);
-    if (logPath)
-        printf("Log:       %s\n", logPath);
     printf("\n");
 
     // 创建检测器
@@ -126,16 +118,7 @@ int main(int argc, char** argv) {
 
     cudaFont* font = cudaFont::Create();
 
-    // 性能日志（可选）
-    PerfLogger perfLog;
-    if (logPath)
-        perfLog.open(logPath);
-
-    // 推理计时器
-    CudaTimer timer;
-
     printf("Processing started...\n");
-    int frameCount = 0;
 
     // 主循环
     while (!gSignalReceived) {
@@ -155,14 +138,12 @@ int main(int argc, char** argv) {
             break;
         }
 
-        // 2. 检测（计时）
-        timer.start();
+        // 2. 检测
         Detection* detections = NULL;
         int count = detector->detect(imgInput,
                                      input->GetWidth(),
                                      input->GetHeight(),
                                      &detections);
-        float inferenceMs = timer.stop();
 
         // 3. 绘制
         if (count > 0) {
@@ -181,21 +162,9 @@ int main(int argc, char** argv) {
                  count, fps);
         output->SetStatus(statusStr);
 
-        // 日志
-        if (logPath)
-            perfLog.log(frameCount, fps, inferenceMs, count);
-
-        if (frameCount % 30 == 0) {
-            printf("Frame %d | %.1f FPS | %.1f ms | %d detections\n",
-                   frameCount, fps, inferenceMs, count);
-        }
-
-        frameCount++;
         if (!output->IsStreaming())
             break;
     }
-
-    printf("Processed %d frames\n", frameCount);
 
     SAFE_DELETE(font);
     SAFE_DELETE(detector);

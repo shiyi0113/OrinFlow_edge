@@ -1,11 +1,7 @@
-#ifndef __DETECTION_H__
-#define __DETECTION_H__
+#pragma once
 
 #include <cmath>
 
-/**
- * 单个检测结果
- */
 struct Detection
 {
     float x1, y1, x2, y2;  // 边界框坐标（像素）
@@ -31,5 +27,3 @@ struct Detection
         return (unionArea > 0) ? (interArea / unionArea) : 0.0f;
     }
 };
-
-#endif

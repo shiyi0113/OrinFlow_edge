@@ -1,5 +1,4 @@
-#ifndef __CUDA_PREPROCESS_H__
-#define __CUDA_PREPROCESS_H__
+#pragma once
 
 #include <cuda_runtime.h>
 #include <cstdint>
@@ -40,5 +39,3 @@ cudaError_t cudaLetterBoxPreprocess(
     LetterBoxInfo* info,
     cudaStream_t stream = nullptr
 );
-
-#endif
