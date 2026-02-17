@@ -92,8 +92,6 @@ int DetectYOLO::postProcess(uint32_t width, uint32_t height)
 
         mDetections.push_back(det_result);
     }
-
-    // 端到端模型已做过 NMS，此处无需再做
-
+    
     return (int)mDetections.size();
 }

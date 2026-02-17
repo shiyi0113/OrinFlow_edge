@@ -1,6 +1,6 @@
 #include <jetson-utils/videoSource.h>
 #include <jetson-utils/videoOutput.h>
-
+#include <jetson-utils/commandLine.h>
 #include <jetson-utils/cudaFont.h>
 #include <jetson-utils/cudaDraw.h>
 #include <signal.h>
@@ -62,7 +62,6 @@ int main(int argc, char** argv) {
     signal(SIGINT, signalHandler);
 
     commandLine cmdLine(argc, argv);
-
     if (cmdLine.GetFlag("help")) {
         printUsage();
         return 0;
@@ -92,8 +91,6 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    detector->loadLabels(labelsPath.c_str());
-
     // 创建输入/输出
     videoSource* input = videoSource::Create(inputUri.c_str());
     if (!input) {
@@ -107,6 +104,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    detector->loadLabels(labelsPath.c_str());
     cudaFont* font = cudaFont::Create();
 
     // 主循环
@@ -129,15 +127,11 @@ int main(int argc, char** argv) {
 
         // 2. 检测
         Detection* detections = NULL;
-        int count = detector->detect(imgInput,
-                                     input->GetWidth(),
-                                     input->GetHeight(),
-                                     &detections);
+        int count = detector->detect(imgInput, input->GetWidth(), input->GetHeight(), &detections);
 
         // 3. 绘制
         if (count > 0) {
-            drawDetections(imgInput, input->GetWidth(), input->GetHeight(),
-                           detections, count, detector, font);
+            drawDetections(imgInput, input->GetWidth(), input->GetHeight(), detections, count, detector, font);
         }
 
         // 4. 输出

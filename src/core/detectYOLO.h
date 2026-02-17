@@ -4,7 +4,7 @@
 #include "cuda/cudaPreprocess.cuh"
 
 /**
- * YOLO 检测器 (端到端模型)
+ * YOLO26 检测器
  *
  * 支持 YOLO 端到端模型，输出格式: [batch, max_det, 6]
  * 其中 6 = [x1, y1, x2, y2, confidence, class_id]
