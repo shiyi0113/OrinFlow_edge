@@ -1,7 +1,7 @@
 #include "ModelBuilder.h"
 
 #include <fstream>
-
+#include <iostream>
 ModelBuilder::ModelBuilder()
     : mLogger(TRTLogger::getInstance())
 {}
@@ -23,7 +23,7 @@ ModelBuilder* ModelBuilder::create(const char* onnxPath, Precision precision)
         delete builder;
         return nullptr;
     }
-
+    
     return builder;
 }
 
@@ -86,8 +86,81 @@ bool ModelBuilder::parseONNX(const char* onnxPath)
         LogError("ModelBuilder: 解析 ONNX 模型失败\n");
         return false;
     }
-    LogInfo("ModelBuilder: ONNX 解析成功 (%d 个输入, %d 个输出)\n",
-            mNetwork->getNbInputs(), mNetwork->getNbOutputs());
+
+    hasDynamicShape = false;
+    std::cout << "=== ONNX模型解析成功 ===" << std::endl;
+    std::cout << "网格输入:" << std::endl;
+    for(int i = 0; i < mNetwork->getNbInputs(); ++i)
+    {
+        nvinfer1::ITensor* input = mNetwork->getInput(i);
+        std::cout << " [" << i << "] name=\"" << input->getName() << "\" shape=";
+        nvinfer1::Dims dims = input->getDimensions();
+        std::cout << "(";
+        for(int d = 0; d < dims.nbDims; ++d)
+        {
+            if(d > 0) std::cout << ", ";
+            std::cout << dims.d[d];
+            if(dims.d[d] == -1)
+            {
+                hasDynamicShape = true;
+            }
+        } 
+        std::cout << ")" << std::endl;
+    }
+    std::cout << "网格输出:" << std::endl;
+    for(int i = 0; i < mNetwork->getNbOutputs(); ++i)
+    {
+        nvinfer1::ITensor* output = mNetwork->getOutput(i);
+        std::cout << " [" << i << "] name=\"" << output->getName() << "\" shape=";
+        nvinfer1::Dims dims = output->getDimensions();
+        std::cout << "(";
+        for(int d = 0; d < dims.nbDims; ++d)
+        {
+            if(d > 0) std::cout << ", ";
+            std::cout << dims.d[d];
+        } 
+        std::cout << ")" << std::endl;
+    }
+    if(hasDynamicShape){
+        nvinfer1::IOptimizationProfile* profile = mBuilder->createOptimizationProfile();
+        for(int i = 0; i < mNetwork->getNbInputs(); ++i)
+        {
+            nvinfer1::ITensor* input = mNetwork->getInput(i);
+            const char* name = input->getName();
+            nvinfer1::Dims dims = input->getDimensions();
+            nvinfer1::Dims minDims = dims, optDims = dims,maxDims = dims;
+            for(int d = 0; d < dims.nbDims; ++d)
+            {
+                if(dims.d[d] == -1){
+                    if(d == 0)
+                    {
+                        minDims.d[d] = 1;
+                        optDims.d[d] = 1;
+                        maxDims.d[d] = 1;
+                    }
+                    else
+                    {
+                        minDims.d[d] = 640;
+                        optDims.d[d] = 640;
+                        maxDims.d[d] = 640;
+                    }
+                }
+            }
+            profile->setDimensions(name,nvinfer1::OptProfileSelector::kMIN,minDims);
+            profile->setDimensions(name,nvinfer1::OptProfileSelector::kOPT,optDims);
+            profile->setDimensions(name,nvinfer1::OptProfileSelector::kMAX,maxDims);
+
+            std::cout << "设置 Profile: \"" << name << "\" "
+                      << "batch=[" << minDims.d[0] << "," << optDims.d[0]
+                      << "," << maxDims.d[0] << "]" << std::endl;
+        }
+        mConfig->addOptimizationProfile(profile);
+    }
+    else
+    {
+        std::cout << "模型输入为静态 shape，无需配置 Optimization Profile." << std::endl;
+    }
+
     return true;
 }
 
