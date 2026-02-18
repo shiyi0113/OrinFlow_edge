@@ -1,7 +1,7 @@
 #include "ModelBuilder.h"
 
 #include <fstream>
-#include <iostream>
+
 ModelBuilder::ModelBuilder()
     : mLogger(TRTLogger::getInstance())
 {}
@@ -70,16 +70,14 @@ bool ModelBuilder::createBuilderAndNetwork()
 
 bool ModelBuilder::parseONNX(const char* onnxPath)
 {
-    auto parser = std::unique_ptr<nvonnxparser::IParser>(
-        nvonnxparser::createParser(*mNetwork,mLogger)
-    );
-    if(!parser)
+    mParser.reset(nvonnxparser::createParser(*mNetwork,mLogger));
+    if(!mParser)
     {
         LogError("ModelBuilder: 创建 ONNX Parser 失败\n");
         return false;
     }
 
-    bool isOk = parser->parseFromFile(onnxPath,
+    bool isOk = mParser->parseFromFile(onnxPath,
         static_cast<int>(nvinfer1::ILogger::Severity::kWARNING));
     if(!isOk)
     {
@@ -88,38 +86,37 @@ bool ModelBuilder::parseONNX(const char* onnxPath)
     }
 
     hasDynamicShape = false;
-    std::cout << "=== ONNX模型解析成功 ===" << std::endl;
-    std::cout << "网格输入:" << std::endl;
+    LogInfo("=== ONNX模型解析成功 ===\n");
+    LogInfo("网格输入:\n");
     for(int i = 0; i < mNetwork->getNbInputs(); ++i)
     {
         nvinfer1::ITensor* input = mNetwork->getInput(i);
-        std::cout << " [" << i << "] name=\"" << input->getName() << "\" shape=";
+        LogInfo("[%d] name=\"%s\",shape=(", i, input->getName());
         nvinfer1::Dims dims = input->getDimensions();
-        std::cout << "(";
+
         for(int d = 0; d < dims.nbDims; ++d)
         {
-            if(d > 0) std::cout << ", ";
-            std::cout << dims.d[d];
+            if(d > 0) LogInfo(", ");
+            LogInfo("%d", dims.d[d]);
             if(dims.d[d] == -1)
             {
                 hasDynamicShape = true;
             }
         } 
-        std::cout << ")" << std::endl;
+        LogInfo(")\n");
     }
-    std::cout << "网格输出:" << std::endl;
+    LogInfo("网格输出:\n");
     for(int i = 0; i < mNetwork->getNbOutputs(); ++i)
     {
         nvinfer1::ITensor* output = mNetwork->getOutput(i);
-        std::cout << " [" << i << "] name=\"" << output->getName() << "\" shape=";
+        LogInfo("[%d] name=\"%s\", shape=(", i ,output->getName());
         nvinfer1::Dims dims = output->getDimensions();
-        std::cout << "(";
         for(int d = 0; d < dims.nbDims; ++d)
         {
-            if(d > 0) std::cout << ", ";
-            std::cout << dims.d[d];
+            if(d > 0) LogInfo(", ");
+            LogInfo("%d", dims.d[d]);
         } 
-        std::cout << ")" << std::endl;
+        LogInfo(")\n");
     }
     if(hasDynamicShape){
         nvinfer1::IOptimizationProfile* profile = mBuilder->createOptimizationProfile();
@@ -149,16 +146,13 @@ bool ModelBuilder::parseONNX(const char* onnxPath)
             profile->setDimensions(name,nvinfer1::OptProfileSelector::kMIN,minDims);
             profile->setDimensions(name,nvinfer1::OptProfileSelector::kOPT,optDims);
             profile->setDimensions(name,nvinfer1::OptProfileSelector::kMAX,maxDims);
-
-            std::cout << "设置 Profile: \"" << name << "\" "
-                      << "batch=[" << minDims.d[0] << "," << optDims.d[0]
-                      << "," << maxDims.d[0] << "]" << std::endl;
+            LogInfo("设置 Profile: \"%s\", batch=[%d, %d, %d]\n", name, minDims.d[0], optDims.d[0], maxDims.d[0]);
         }
         mConfig->addOptimizationProfile(profile);
     }
     else
     {
-        std::cout << "模型输入为静态 shape，无需配置 Optimization Profile." << std::endl;
+        LogInfo("模型输入为静态 shape，无需配置 Optimization Profile.\n");
     }
 
     return true;
@@ -198,7 +192,7 @@ bool ModelBuilder::buildAndSerialize(const char* enginePath)
     auto serialized = std::unique_ptr<nvinfer1::IHostMemory>(
         mBuilder->buildSerializedNetwork(*mNetwork,*mConfig)
     );
-    if(!serialized | serialized->size() == 0)
+    if(!serialized || serialized->size() == 0)
     {
         LogError("ModelBuilder: 构建引擎失败\n");
         return false;

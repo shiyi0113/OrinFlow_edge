@@ -23,6 +23,7 @@ void printUsage() {
     printf("  --model=PATH      Path to Model file\n");
     printf("  --labels=PATH     Path to class labels file\n");
     printf("  --threshold=N     Detection threshold (default: 0.75)\n");
+    printf("  --precision=MODE  Build precision: fp32, fp16, int8 (default: fp16)\n");
     printf("\nNote: Relative paths are resolved from the project root directory.\n");
     printf("      Absolute paths and protocol URIs (csi://, rtsp://) are used as-is.\n");
     printf("\nExamples:\n");
@@ -75,6 +76,15 @@ int main(int argc, char** argv) {
     std::string modelPath  = resolvePath(cmdLine.GetString("model",  "models/yolo26x_INT8.engine"), root);
     std::string labelsPath = resolvePath(cmdLine.GetString("labels", "data/labels/coco.txt"), root);
     float threshold        = cmdLine.GetFloat("threshold", 0.75f);
+    const char* precisionStr = cmdLine.GetString("precision", "fp16");
+
+    Precision precision = Precision::FP16;
+    if (strcmp(precisionStr, "fp32") == 0)
+        precision = Precision::FP32;
+    else if(strcmp(precisionStr, "int8") == 0)
+        precision = Precision::INT8;
+    else if (strcmp(precisionStr, "fp16") != 0)
+        printf("Warning: unknown precision '%s', using fp16\n", precisionStr);
 
     printf("=== YOLO26 Detector ===\n");
     printf("Root:      %s\n", root.c_str());
@@ -83,6 +93,7 @@ int main(int argc, char** argv) {
     printf("Model:     %s\n", modelPath.c_str());
     printf("Labels:    %s\n", labelsPath.c_str());
     printf("Threshold: %.2f\n", threshold);
+    printf("Precision: %s\n", precisionStr);
     printf("\n");
 
     std::string enginePath = modelPath;
@@ -91,7 +102,7 @@ int main(int argc, char** argv) {
         enginePath = modelPath.substr(0,modelPath.size() - 5) + ".engine";
         printf("检测到 ONNX 模型，开始构建引擎...\n");
 
-        ModelBuilder* builder = ModelBuilder::create(modelPath.c_str(), Precision::FP16);
+        ModelBuilder* builder = ModelBuilder::create(modelPath.c_str(), precision);
         if (!builder) {
             printf("Failed to create model builder: %s\n", modelPath.c_str());
             return -1;
