@@ -5,7 +5,8 @@
 #include <jetson-utils/cudaDraw.h>
 #include <signal.h>
 
-#include "core/detectYOLO.h"
+#include "core/DetectYOLO.h"
+#include "core/ModelBuilder.h"
 #include "utils/common.h"
 
 bool gSignalReceived = false;
@@ -19,9 +20,9 @@ void printUsage() {
     printf("Options:\n");
     printf("  --input=URI       Input video source (file, csi, v4l2, rtsp)\n");
     printf("  --output=URI      Output video destination\n");
-    printf("  --model=PATH      Path to TensorRT engine file\n");
+    printf("  --model=PATH      Path to Model file\n");
     printf("  --labels=PATH     Path to class labels file\n");
-    printf("  --threshold=N     Detection threshold (default: 0.25)\n");
+    printf("  --threshold=N     Detection threshold (default: 0.75)\n");
     printf("\nNote: Relative paths are resolved from the project root directory.\n");
     printf("      Absolute paths and protocol URIs (csi://, rtsp://) are used as-is.\n");
     printf("\nExamples:\n");
@@ -73,7 +74,7 @@ int main(int argc, char** argv) {
     std::string outputUri  = resolvePath(cmdLine.GetString("output", "output/output.mp4"), root);
     std::string modelPath  = resolvePath(cmdLine.GetString("model",  "models/yolo26x_INT8.engine"), root);
     std::string labelsPath = resolvePath(cmdLine.GetString("labels", "data/labels/coco.txt"), root);
-    float threshold        = cmdLine.GetFloat("threshold", 0.25f);
+    float threshold        = cmdLine.GetFloat("threshold", 0.75f);
 
     printf("=== YOLO26 Detector ===\n");
     printf("Root:      %s\n", root.c_str());
@@ -84,10 +85,31 @@ int main(int argc, char** argv) {
     printf("Threshold: %.2f\n", threshold);
     printf("\n");
 
+    std::string enginePath = modelPath;
+    if(modelPath.size()>=5 && modelPath.substr(modelPath.size() - 5) == ".onnx")
+    {
+        enginePath = modelPath.substr(0,modelPath.size() - 5) + ".engine";
+        printf("检测到 ONNX 模型，开始构建引擎...\n");
+
+        ModelBuilder* builder = ModelBuilder::create(modelPath.c_str(), Precision::FP16);
+        if (!builder) {
+            printf("Failed to create model builder: %s\n", modelPath.c_str());
+            return -1;
+        }
+
+        if (!builder->build(enginePath.c_str())) {
+            printf("Failed to build engine: %s\n", enginePath.c_str());
+            delete builder;
+            return -1;
+        }
+
+        delete builder;
+        printf("引擎构建完成: %s\n\n", enginePath.c_str());
+    }
     // 创建检测器
-    DetectYOLO* detector = DetectYOLO::create(modelPath.c_str(), threshold);
+    DetectYOLO* detector = DetectYOLO::create(enginePath.c_str(), threshold);
     if (!detector) {
-        printf("Failed to create detector: %s\n", modelPath.c_str());
+        printf("Failed to create detector: %s\n", enginePath.c_str());
         return -1;
     }
 

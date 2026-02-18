@@ -1,4 +1,4 @@
-#include "detectYOLO.h"
+#include "DetectYOLO.h"
 #include <jetson-utils/logging.h>
 #include <cmath>
 

@@ -1,7 +1,8 @@
 # 源文件
 set(CORE_SOURCES
     core/DetectBase.cpp
-    core/detectYOLO.cpp
+    core/DetectYOLO.cpp
+    core/ModelBuilder.cpp
 )
 
 set(CUDA_SOURCES
@@ -21,10 +22,10 @@ target_include_directories(orinflow_edge PUBLIC
     ${CUDAToolkit_INCLUDE_DIRS}
 )
 
-target_link_libraries(orinflow_edge
-    PRIVATE
+target_link_libraries(orinflow_edge PRIVATE
     CUDA::cudart
     CUDA::cublas
+    nvonnxparser
     nvinfer
     nvinfer_plugin
     jetson-utils
