@@ -35,7 +35,7 @@ protected:
     int postProcess(uint32_t width, uint32_t height) override;
 
 protected:
-    float mThreshold = 0.75f;
+    float mThreshold = 0.25f;
     int   mMaxDetections = 300;
 
     LetterBoxInfo mLetterBoxInfo;

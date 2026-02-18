@@ -15,6 +15,9 @@ find_package(jetson-utils REQUIRED)
 set(TENSORRT_INCLUDE_DIR "/usr/include/aarch64-linux-gnu")
 set(TENSORRT_LIB_DIR "/usr/lib/aarch64-linux-gnu")
 
+# 项目根路径
+add_compile_definitions(ORINFLOW_COMPILE_TIME_ROOT="${CMAKE_SOURCE_DIR}")
+
 # 子目录
 add_subdirectory(src)
 add_subdirectory(app)

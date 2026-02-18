@@ -1,4 +1,5 @@
 #include "DetectBase.h"
+#include "../utils/common.h"
 #include <fstream>
 #include <jetson-utils/filesystem.h>
 #include <sstream>
@@ -51,7 +52,7 @@ bool DetectBase::loadModel(const char* enginePath)
         LogError("DetectBase: 创建执行上下文失败\n");
         return false;
     }
-    cudaStreamCreate(&mStream);
+    CUDA_CHECK(cudaStreamCreate(&mStream));
 
     if (!allocBuffers()) {
         LogError("DetectBase: 分配显存失败\n");
@@ -88,8 +89,7 @@ bool DetectBase::allocBuffers()
         size_t totalSize = volume * elementSize;
 
         void* allocatedPtr = nullptr;
-        if(cudaMalloc(&allocatedPtr,totalSize) !=cudaSuccess)
-            return false;
+        CUDA_CHECK(cudaMalloc(&allocatedPtr, totalSize));
         if(mode == nvinfer1::TensorIOMode::kINPUT)
         {
             if(mInputDevice) cudaFree(mInputDevice);
@@ -125,13 +125,21 @@ int DetectBase::detect(void* image, uint32_t width, uint32_t height,Detection** 
         LogError("DetectBase: 预处理失败\n");
         return -1;
     }
-    // 推理
-    bool success = mContext->enqueueV3(mStream);
-    cudaMemcpyAsync(mOutputHost, mOutputDevice, mOutputSize,
-                    cudaMemcpyDeviceToHost, mStream);
-    cudaStreamSynchronize(mStream);
-    if (!success) {
-        LogError("DetectBase: 推理失败\n");
+    // 推理（enqueueV3 是异步提交，失败表示入队本身出错）
+    if (!mContext->enqueueV3(mStream)) {
+        LogError("DetectBase: 推理入队失败\n");
+        return -1;
+    }
+    // D2H 拷贝与同步（detect() 返回 int，无法用 CUDA_CHECK 宏，手动内联检查）
+    cudaError_t err = cudaMemcpyAsync(mOutputHost, mOutputDevice, mOutputSize,
+                                      cudaMemcpyDeviceToHost, mStream);
+    if (err != cudaSuccess) {
+        LogError("DetectBase: cudaMemcpyAsync 失败 - %s\n", cudaGetErrorString(err));
+        return -1;
+    }
+    err = cudaStreamSynchronize(mStream);
+    if (err != cudaSuccess) {
+        LogError("DetectBase: cudaStreamSynchronize 失败 - %s\n", cudaGetErrorString(err));
         return -1;
     }
     // 后处理

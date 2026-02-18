@@ -85,7 +85,7 @@ bool ModelBuilder::parseONNX(const char* onnxPath)
         return false;
     }
 
-    hasDynamicShape = false;
+    bool hasDynamicShape = false;
     LogInfo("=== ONNX模型解析成功 ===\n");
     LogInfo("网格输入:\n");
     for(int i = 0; i < mNetwork->getNbInputs(); ++i)

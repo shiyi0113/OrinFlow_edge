@@ -37,5 +37,4 @@ private:
     
     Precision  mPrecision = Precision::FP16;
     size_t     mMaxWorkspaceSize = 1ULL << 28;  // 默认 256MB
-    bool hasDynamicShape = false;
 };

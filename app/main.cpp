@@ -4,6 +4,7 @@
 #include <jetson-utils/cudaFont.h>
 #include <jetson-utils/cudaDraw.h>
 #include <signal.h>
+#include <filesystem>
 
 #include "core/DetectYOLO.h"
 #include "core/ModelBuilder.h"
@@ -129,6 +130,17 @@ int main(int argc, char** argv) {
     if (!input) {
         printf("Failed to create input: %s\n", inputUri.c_str());
         return -1;
+    }
+
+    // 文件输出时自动创建目录
+    if (outputUri.find("://") == std::string::npos) {
+        std::filesystem::path outDir = std::filesystem::path(outputUri).parent_path();
+        if (!outDir.empty()) {
+            std::error_code ec;
+            std::filesystem::create_directories(outDir, ec);
+            if (ec)
+                printf("Warning: 无法创建输出目录 %s: %s\n", outDir.c_str(), ec.message().c_str());
+        }
     }
 
     videoOutput* output = videoOutput::Create(outputUri.c_str());

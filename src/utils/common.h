@@ -1,25 +1,55 @@
 #pragma once
 
 #include <string>
-#include <unistd.h>
+#include <cstdlib>               // getenv
+#include <unistd.h>              // readlink, access
 #include <linux/limits.h>
-#include <vector_types.h>   // float4
+#include <cuda_runtime.h>        // cudaError_t, cudaGetErrorString
+#include <jetson-utils/logging.h> // LogError
+#include <vector_types.h>        // float4
 
+// CUDA 错误检查宏
+#define CUDA_CHECK(call)                                                    \
+    do {                                                                    \
+        cudaError_t _err = (call);                                          \
+        if (_err != cudaSuccess) {                                          \
+            LogError("CUDA error [%s:%d] `%s`: %s\n",                      \
+                     __FILE__, __LINE__, #call, cudaGetErrorString(_err));  \
+            return false;                                                   \
+        }                                                                   \
+    } while (0)
+
+// 返回项目根目录的绝对路径。
 inline std::string getProjectRoot()
 {
+    // 1. 环境变量覆盖（最高优先级）
+    const char* envRoot = getenv("ORINFLOW_ROOT");
+    if (envRoot && envRoot[0] != '\0')
+        return std::string(envRoot);
+
+    // 2. 从 exe 向上查找项目专属锚点文件
     char buf[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (len <= 0) return "";
-    buf[len] = '\0';
-
-    std::string exePath(buf);
-    // 向上三级
-    for (int i = 0; i < 3; i++) {
-        size_t pos = exePath.rfind('/');
-        if (pos == std::string::npos) return "";
-        exePath = exePath.substr(0, pos);
+    if (len > 0) {
+        buf[len] = '\0';
+        std::string path(buf);
+        for (int i = 0; i < 10; i++) {
+            size_t pos = path.rfind('/');
+            if (pos == std::string::npos) break;
+            path = path.substr(0, pos);
+            if (path.empty()) break;
+            if (access((path + "/data/labels/coco.txt").c_str(), F_OK) == 0)
+                return path;
+        }
     }
-    return exePath;
+
+    // 3. CMake 编译期注入的绝对路径
+#ifdef ORINFLOW_COMPILE_TIME_ROOT
+    if (access(ORINFLOW_COMPILE_TIME_ROOT "/data/labels/coco.txt", F_OK) == 0)
+        return ORINFLOW_COMPILE_TIME_ROOT;
+#endif
+
+    return "";
 }
 
 inline std::string resolvePath(const char* path, const std::string& root)
